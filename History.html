@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Exhofy - History</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(to bottom right, #000000, #1a1a1a, #111111);
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 2rem;
+    }
+
+    h1, h2 {
+      text-align: center;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    button {
+      padding: 0.6rem 1.4rem;
+      background: royalblue;
+      border: none;
+      color: white;
+      font-weight: bold;
+      font-size: 1rem;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      opacity: 0.85;
+    }
+
+    .clear-btn {
+      background: #dc2626;
+    }
+
+    #history {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      padding-top: 1rem;
+    }
+
+    .song-card {
+      background: #222;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      position: relative;
+      transition: transform 0.2s ease;
+    }
+
+    .song-card:hover {
+      transform: scale(1.02);
+    }
+
+    .cover {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      background: #444;
+    }
+
+    .card-body {
+      padding: 1rem;
+    }
+
+    .card-body h3 {
+      font-size: 1.2rem;
+      margin: 0;
+    }
+
+    .card-body p {
+      margin: 0.2rem 0;
+      color: #aaa;
+    }
+
+    .links {
+      margin-top: 0.8rem;
+      display: flex;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+    }
+
+    .links a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0.5rem 0.8rem;
+      border-radius: 9999px;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .spotify {
+      background: #1db954;
+      color: white;
+    }
+
+    .youtube {
+      background: #ff0000;
+      color: white;
+    }
+
+    .spotify img, .youtube img {
+      width: 16px;
+      height: 16px;
+    }
+
+    .menu-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: none;
+      border: none;
+      font-size: 22px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .menu {
+      position: absolute;
+      top: 40px;
+      right: 12px;
+      background: #333;
+      border-radius: 10px;
+      padding: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+      display: none;
+      flex-direction: column;
+      z-index: 999;
+    }
+
+    .menu button {
+      background: none;
+      border: none;
+      color: white;
+      text-align: left;
+      padding: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      width: 100%;
+    }
+
+    .menu button:hover {
+      background: #444;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>
+    <img src="assets/logo.png" alt="Exhofy Logo" style="height: 50px; vertical-align: middle; margin-right: 10px;">
+    Exhofy History
+  </h1>
+
+  <div class="controls">
+    <button class="clear-btn" onclick="clearHistory()">Clear All History</button>
+  </div>
+
+  <h2>📜 Your Recent Songs</h2>
+  <div id="history"></div>
+
+  <script>
+    function clearHistory() {
+      localStorage.removeItem("songHistory");
+      renderHistory();
+    }
+
+    function deleteSong(index) {
+      const history = JSON.parse(localStorage.getItem("songHistory") || "[]");
+      history.splice(index, 1);
+      localStorage.setItem("songHistory", JSON.stringify(history));
+      renderHistory();
+    }
+
+    function shareSong(song) {
+      const text = `🎵 ${song.title} by ${song.artist}`;
+      navigator.clipboard.writeText(text);
+      alert("Copied to clipboard!");
+    }
+
+    function viewArtist(song) {
+      if (song.spotify) {
+        window.open(song.spotify, "_blank");
+      } else if (song.youtube) {
+        window.open(song.youtube, "_blank");
+      } else {
+        alert("No artist link available.");
+      }
+    }
+
+    function tellEchofy() {
+      window.location.href = "feedback.html";
+    }
+
+    function toggleMenu(index) {
+      const menu = document.getElementById(`menu-${index}`);
+      menu.style.display = menu.style.display === "flex" ? "none" : "flex";
+    }
+
+    function renderHistory() {
+      const container = document.getElementById("history");
+      container.innerHTML = "";
+
+      const history = JSON.parse(localStorage.getItem("songHistory") || "[]");
+
+      if (history.length === 0) {
+        container.innerHTML = "<p style='text-align:center;'>No history found yet.</p>";
+        return;
+      }
+
+      history.forEach((song, index) => {
+        const card = document.createElement("div");
+        card.className = "song-card";
+        card.innerHTML = `
+          <img class="cover" src="${song.cover}" alt="Cover Image"/>
+          <div class="card-body">
+            <h3>${song.title}</h3>
+            <p>${song.artist}</p>
+            <p style="font-size: 0.8rem; color: #666;">${new Date(song.timestamp).toLocaleString()}</p>
+            <div class="links">
+              ${song.spotify ? `
+                <a href="${song.spotify}" target="_blank" class="spotify">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/8/84/Spotify_icon.svg" alt="Spotify"/>Spotify
+                </a>` : ''}
+              ${song.youtube ? `
+                <a href="${song.youtube}" target="_blank" class="youtube">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg" alt="YouTube"/>YouTube
+                </a>` : ''}
+            </div>
+          </div>
+          <button class="menu-btn" onclick="toggleMenu(${index})">⋮</button>
+          <div class="menu" id="menu-${index}">
+            <button onclick="deleteSong(${index})">✅ Remove</button>
+            <button onclick='shareSong(${JSON.stringify(song)})'>📤 Share Song</button>
+            <button onclick='viewArtist(${JSON.stringify(song)})'>👤 View Artist</button>
+            <button onclick="tellEchofy()">❌ Wrong song? Tell Echofy</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    renderHistory();
+  </script>
+</body>
+</html>
