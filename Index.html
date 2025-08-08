@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Exhofy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <style>
+    body {
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    /* Wave animation styles */
+    .wave {
+      position: absolute;
+      border: 2px solid #C0F000;
+      border-radius: 50%;
+      opacity: 0.6;
+      animation: ripple 1.8s infinite;
+      transform: translate(-50%, -50%);
+      left: 50%;
+      top: 50%;
+    }
+
+    .wave:nth-child(2) { animation-delay: 0.5s; }
+    .wave:nth-child(3) { animation-delay: 1s; }
+
+    @keyframes ripple {
+      0% {
+        width: 0;
+        height: 0;
+        opacity: 0.9;
+      }
+      100% {
+        width: 280px;
+        height: 280px;
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-gradient-to-br from-black via-gray-900 to-indigo-950 text-white">
+  <div class="min-h-screen flex flex-col items-center justify-center px-4 relative">
+
+    <!-- Logo + App Name -->
+    <div class="flex items-center gap-3 mb-6 mt-10">
+      <img src="assets/logo.png" alt="Exhofy Logo" class="w-14 h-14 rounded-full shadow-md border-2 border-white">
+      <h1 class="text-5xl font-extrabold tracking-wider">Exhofy</h1>
+    </div>
+
+    <!-- Subtitle -->
+    <p class="text-zinc-400 text-lg text-center mb-8">
+      Identify any song instantly with one tap
+    </p>
+
+    <!-- History Button -->
+    <button onclick="window.location.href='history.html'" class="absolute top-6 left-6 flex items-center gap-2 text-sm bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-full">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v5l3 3M12 3a9 9 0 110 18 9 9 0 010-18z" />
+      </svg>
+      History
+    </button>
+
+    <!-- Mic Button with Waves -->
+    <div class="relative flex items-center justify-center mb-10">
+      <div id="waves" class="absolute hidden z-0 pointer-events-none">
+        <div class="wave"></div>
+        <div class="wave"></div>
+        <div class="wave"></div>
+      </div>
+      <button id="micButton" class="w-40 h-40 rounded-full bg-[#0A0A0A] hover:bg-[#1A1A1A] flex items-center justify-center shadow-2xl transition duration-300 z-10">
+        <span class="text-[90px] font-extrabold leading-none tracking-wider" style="color: #C0F000; font-family: 'Orbitron', sans-serif;">
+          X
+        </span>
+      </button>
+    </div>
+
+    <!-- Song Result -->
+    <div id="result" class="w-full max-w-2xl mt-4"></div>
+
+    <!-- Footer -->
+    <footer class="mt-16 text-sm text-zinc-500 text-center">
+      Built with 💙 by You | No login needed
+    </footer>
+  </div>
+
+  <!-- JavaScript -->
+  <script>
+    const micButton = document.getElementById('micButton');
+    const resultDiv = document.getElementById('result');
+    const waves = document.getElementById('waves');
+
+    const ACR_HOST = 'identify-ap-southeast-1.acrcloud.com';
+    const ACCESS_KEY = '7ccd94a5cd49655972378554375567fa';
+    const ACCESS_SECRET = 'E6axyReduE55SYeKAoCEIKqt3QH9TBlkkzX3Iv4u';
+    const YT_API_KEY = 'AIzaSyBasW5PSLSlhINOKK8WLlZoGjZ_JRbM5w0';
+    const SPOTIFY_CLIENT_ID = 'e238f515dfe24eec81d03881ec24e9ea';
+    const SPOTIFY_CLIENT_SECRET = '7a09d8bd0fbf4c2c85ca5718fb87346e';
+
+    async function getSpotifyToken() {
+      const res = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': 'Basic ' + btoa(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET),
+        },
+        body: 'grant_type=client_credentials',
+      });
+      const data = await res.json();
+      return data.access_token;
+    }
+
+    function saveToHistory(songObj) {
+      const existing = JSON.parse(localStorage.getItem("songHistory") || "[]");
+      existing.unshift(songObj);
+      localStorage.setItem("songHistory", JSON.stringify(existing));
+    }
+
+    micButton.addEventListener('click', async () => {
+      try {
+        resultDiv.innerHTML = '<p class="text-white text-center">🎙️ Listening...</p>';
+        waves.classList.remove("hidden");
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream);
+        const chunks = [];
+
+        recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+        recorder.onstop = async () => {
+          const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const buffer = new Uint8Array(arrayBuffer);
+
+          const timestamp = Math.floor(Date.now() / 1000);
+          const stringToSign = ['POST', '/v1/identify', ACCESS_KEY, 'audio', '1', timestamp].join('\n');
+          const signature = CryptoJS.HmacSHA1(stringToSign, ACCESS_SECRET).toString(CryptoJS.enc.Base64);
+
+          const formData = new FormData();
+          formData.append('sample', new Blob([buffer], { type: 'audio/webm' }));
+          formData.append('access_key', ACCESS_KEY);
+          formData.append('data_type', 'audio');
+          formData.append('signature', signature);
+          formData.append('sample_bytes', buffer.length);
+          formData.append('timestamp', timestamp);
+          formData.append('signature_version', '1');
+
+          resultDiv.innerHTML = '<p class="text-white text-center">🔍 Identifying...</p>';
+
+          const acrRes = await fetch(`https://${ACR_HOST}/v1/identify`, { method: 'POST', body: formData });
+          const acrData = await acrRes.json();
+
+          waves.classList.add("hidden");
+
+          if (acrData.status.code === 0 && acrData.metadata?.music?.length > 0) {
+            const song = acrData.metadata.music[0];
+            const title = song.title;
+            const artist = song.artists?.[0]?.name;
+
+            const spotifyToken = await getSpotifyToken();
+            const spotifyRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(title + ' ' + artist)}&type=track&limit=1`, {
+              headers: { Authorization: `Bearer ${spotifyToken}` }
+            });
+            const spotifyData = await spotifyRes.json();
+            const spotifyTrack = spotifyData.tracks?.items?.[0];
+
+            const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(title + ' ' + artist)}&key=${YT_API_KEY}`);
+            const ytData = await ytRes.json();
+            const ytVideo = ytData.items?.[0];
+
+            const img = spotifyTrack?.album?.images?.[0]?.url || ytVideo?.snippet?.thumbnails?.high?.url || 'https://via.placeholder.com/100x100?text=No+Image';
+            const spotifyLink = spotifyTrack?.external_urls?.spotify;
+            const youtubeLink = ytVideo ? `https://www.youtube.com/watch?v=${ytVideo.id.videoId}` : '';
+
+            resultDiv.innerHTML = `
+              <div class="bg-zinc-800 bg-opacity-80 backdrop-blur-sm rounded-xl px-6 py-4 flex flex-col items-center text-center shadow-xl w-full max-w-2xl mt-6">
+                <img src="${img}" alt="Album" class="w-32 h-32 rounded-full mb-4 object-cover shadow-md border-2 border-white">
+                <p class="text-lg font-semibold">${title}</p>
+                <p class="text-sm text-zinc-400 mb-3">by ${artist}</p>
+                <div class="flex gap-4 justify-center">
+                  ${spotifyLink ? `<a href="${spotifyLink}" class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full transition"><img src="https://upload.wikimedia.org/wikipedia/commons/8/84/Spotify_icon.svg" class="w-5 h-5"/>Spotify</a>` : ''}
+                  ${youtubeLink ? `<a href="${youtubeLink}" class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-full transition"><img src="https://upload.wikimedia.org/wikipedia/commons/b/b8/YouTube_Logo_2017.svg" class="w-5 h-5"/>YouTube</a>` : ''}
+                </div>
+              </div>`;
+
+            saveToHistory({
+              title,
+              artist,
+              cover: img,
+              spotify: spotifyLink,
+              youtube: youtubeLink,
+              timestamp: new Date().toISOString()
+            });
+
+          } else {
+            resultDiv.innerHTML = `<p class="text-red-400 mt-10 text-center">❌ Song not recognized. Try again with louder or clearer audio.</p>`;
+          }
+        };
+
+        recorder.start();
+        setTimeout(() => {
+          recorder.stop();
+          stream.getTracks().forEach(t => t.stop());
+          waves.classList.add("hidden");
+        }, 15000);
+      } catch (err) {
+        console.error(err);
+        alert('Microphone access denied or unsupported.');
+        waves.classList.add("hidden");
+      }
+    });
+  </script>
+</body>
+</html>
